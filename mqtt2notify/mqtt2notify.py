@@ -88,10 +88,11 @@ class ShackData(threading.Thread):
 
         # Loop until told otherwise
         while (not exit_me):
-            # Check here.
-            self.reset_max_min()
-
             now = datetime.now()
+            # Check here.
+            self.reset_max_min(now)
+            self.check_sun_up(now)
+
             # Is it time to send a WX update?
             if self.ok_send_wx(now):
                 self.send_wx_message(now)
@@ -105,7 +106,7 @@ class ShackData(threading.Thread):
 
     def send_wx_message(self, now):
         # Make sure there are sensible temparture and max and min values before displaying anything
-        if(self.min_temperature != self.max_temperature):
+        if(self.min_temperature != self.max_temperature) or self.humidity != 0:
             status1 = "%02.0f:%02.0f Temp %2.1fC (%2.1f, %2.1f) " % (now.hour, now.minute, self.temperature, self.min_temperature, self.max_temperature)
         else:
             status1 = "%02.0f:%02.0f Temp %2.1fC " % (now.hour, now.minute, self.temperature)
@@ -214,13 +215,14 @@ class ShackData(threading.Thread):
                 return False
 
     def ok_send_telemetry(self, now):
-        if(self.check_sun_up(now) and
-           now.hour % 2 == 0 and
-           now.minute == 45 and
-           now.second == 20):
-            return True
-        else:
-            return False
+        if self.pv_watts < 0:
+            if(self.is_sun_up() and
+               now.hour % 2 == 0 and
+               now.minute == 45 and
+               now.second == 20):
+                return True
+            else:
+                return False
 
     def check_interval(self, value):
         now = datetime.now()
@@ -476,11 +478,19 @@ class ShackData(threading.Thread):
         self.battery_volts = float(value)
 
     def check_sun_up(self, now):
+        # Case 2. Started up after sunrise
+        if self.today == date.today() and now <= self.next_setting:
+            with self.lock:
+                self.sun = True
+            return True
+        # Case 1. Running all night and everything gets reset at midnight.
+        # Now will be between the two.
         if self.next_rising <= now <= self.next_setting:
             with self.lock:
                 self.sun = True
             return True
         else:
+            self.sun = False
             return False
 
     def sun_up(self):
@@ -497,62 +507,65 @@ class ShackData(threading.Thread):
         with self.lock:
             self.timestamp = value
 
-    def reset_max_min(self):
+    def reset_max_min(self, now):
         if self.today != date.today():
-            logger.info("Resetting max/min")
-            with self.lock:
-                self.wind_speed = 0
-                self.wind_gust = 0
-                self.max_wind_gust = 0
-                self.max_temperature = 0
-                self.min_temperature = 0
-                self.max_humidity = 0
-                self.min_humidity = 0
-                self.max_pressure = 0
-                self.min_pressure = 0
-                self.pv_samples = 0
-                self.pv_total = 0
-                self.pv_average = 0
-                self.rain_24h = 0
-                self.today = date.today()
-                self.get_sunset_sunrise()
-                return True
+            # Tweet happens at 15 seconds past the hour
+            if now.second > 15:
+                logger.info("Resetting max/min")
+                with self.lock:
+                    self.wind_speed = 0
+                    self.wind_gust = 0
+                    self.max_wind_gust = 0
+                    self.max_temperature = 0
+                    self.min_temperature = 0
+                    self.max_humidity = 0
+                    self.min_humidity = 0
+                    self.max_pressure = 0
+                    self.min_pressure = 0
+                    self.pv_samples = 0
+                    self.pv_total = 0
+                    self.pv_average = 0
+                    self.rain_24h = 0
+                    self.today = date.today()
+                    self.get_sunset_sunrise()
+                    return True
+            else:
+                return False
         else:
             return False
 
     def process_pv_messages(self, payload):
-        now = datetime.now()
         myMsg = ""
         # Have We PV output?
-        # Sun up. Should be after dawn and panels start production
-        if(int(payload) > 0 and
-           self.check_sun_up(now) and
-           self.sun_state != 3):
-            myMsg = "The Sky's Awake so I'm Awake"
-            state = 1
-        # If the sun is already up, then a we had some cloud cover
-        elif(int(payload) > 0 and self.is_sun_up()):
-            myMsg = "Welcome back Mr. Sun."
-            state = 2
-        # Sun is already up but has dissappeared but also we can be past
-        # sunrise before payload > 0
-        elif(int(payload) == 0 and self.is_sun_up() and self.sun_state == 1 or self.sun_state == 2):
-            myMsg = "Woops, where did the Sun go?"
-            state = 3
-        # Sun has gone and past sunset
-        elif(int(payload) == 0 and not self.check_sun_up(now) and self.sun_state == 1 or self.sun_state == 2):
-            myMsg = "Bye Bye Mr. Sun, see you tomorrow"
-            state = 4
+        # Until dawn, do nothing
+        if(self.is_sun_up()):
+            # Passed Dawn, now if we have PV output, sun is up
+            # and it hasn't just gone behind a cloud
+            if(int(payload) > 0 and self.sun_state == 0):
+                myMsg = "The Sky's awake so I'm awake (PV online)"
+                self.sun_state = 1
+            # Passed Dawn, sun was up but has dropped
+            elif(int(payload) == 0 and self.sun_state == 1):
+                myMsg = "PV offline"
+                self.sun_state = 2
+            # Passed Dawn, sun was up, dropped and has come back
+            elif(int(payload) > 0 and self.sun_state == 2):
+                myMsg = "PV back online"
+                self.sun_state = 3
+            # Set wattage
+            self.set_pv_watts(payload)
         else:
-            myMsg = "Setting Sun 'state' to 0"
-            state = 0
-        self.set_pv_watts(payload)
+            # Past Sundown and we haven't already sent the message
+            if self.sun_state != 0:
+                myMsg = "Sunset"
+                self.sun_state = 0
+            else:
+                self.sun_state = 0
+                myMsg = ""
 
-        if myMsg != "" and self.sun_state != state:
-            logger.debug(" self.sun_state %d, state %d" % (self.sun_state, state ))
-            self.sun_state = state
+        if myMsg != "":
+            self.send_tweet(payload)
             notify("PV Update", myMsg)
-            logger.debug(myMsg)
 
     # Serial to parallel convertor
     def process_wx_messages(self, topic, payload):
@@ -617,6 +630,7 @@ class ShackData(threading.Thread):
             self.send_tweet(payload)
             logger.info(payload)
         else:
+            notify("Sat Update", payload)
             logger.info(payload)
 
     def process_battery_messages(self, payload):
@@ -641,7 +655,6 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe([("house/debug", 0),
                       ("wx/EI7IG-1/#", 0),
                       ("house/office/sat/#", 0),
-                      ("house/office/radio/#", 0),
                       ("house/energy/owl/pv", 0),
                       ("house/energy/battery/voltage/#", 0)])
 #   client.subscribe(parser.get('mqtt', 'topics'))
@@ -656,10 +669,6 @@ def on_message(client, MyShack, msg):
         MyShack.process_pv_messages(msg.payload)
     elif msg.topic == "house/energy/battery/voltage":
         MyShack.process_battery_messages(msg.payload)
-    # Radio has changed state
-    elif msg.topic == "house/office/radio/ft847":
-        print (msg.topic+" "+msg.payload)
-        sendmessage(msg.topic, msg.payload)
     # Control Messages
     elif msg.topic == "house/debug":
         #

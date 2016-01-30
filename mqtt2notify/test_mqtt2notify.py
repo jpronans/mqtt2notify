@@ -184,19 +184,21 @@ class mqtt2notifyTest(unittest.TestCase):
         self.assertTrue(self.timestamp, self.shack.time_stamp())
 
     def test_reset_max_min(self):
+        today = date.today()
         self.shack.pv_average = 10
         today = date.today()
-        one_day = timedelta(days=1)
-        self.shack.today = today - one_day
-        self.assertTrue(self.shack.reset_max_min())
+        # Yesterday, 23:59
+        self.shack.today = datetime(today.year, today.month, today.day - 1, 23, 59, 00)
+        # Today 16 seconds past midnight
+        self.assertTrue(self.shack.reset_max_min(datetime(today.year, today.month, today.day, 00, 00, 16)))
         # No need to check all of them
         self.assertEqual(self.shack.wind_speed, 0)
         self.assertEqual(self.shack.pv_average, 0)
         self.assertEqual(self.shack.today, date.today())
 
-        # If called today, should not reset and should return false
+        # Try again at 15 seconds past the hour, should be false
         self.shack.today = date.today()
-        self.assertFalse(self.shack.reset_max_min())
+        self.assertFalse(self.shack.reset_max_min(datetime(today.year, today.month, today.day, 00, 00, 15)))
 
     def test_check_sun_up(self):
         # Set up
@@ -210,9 +212,13 @@ class mqtt2notifyTest(unittest.TestCase):
         self.shack.next_rising = self.next_rising
         self.shack.next_setting = self.next_setting
         now = datetime.now()
+        # Case 1. After Sunrise
+        if now < self.next_setting and self.shack.today == date.today():
+            self.assertTrue(self.shack.check_sun_up(now))
         # Are we before sunrise or after sunset?
-        if now < self.next_rising or now > self.next_setting:
-            self.assertFalse(self.shack.check_sun_up(now))
+        #if now < self.shack.next_rising or now > self.shack.next_setting:
+        #    self.assertFalse(self.shack.check_sun_up(now))
+        # Case 2 
         if self.next_rising <= now <= self.next_setting:
             # Sun should be up so
             self.assertTrue(self.shack.check_sun_up(now))
@@ -252,17 +258,38 @@ class mqtt2notifyTest(unittest.TestCase):
         self.assertEqual(self.shack.pv_watts, 100)
         self.assertEqual(self.shack.sun_state, 1)
 
+        self.shack.process_pv_messages(100)
+        self.assertEqual(self.shack.pv_watts, 100)
+        self.assertEqual(self.shack.sun_state, 1)
+
         # Should get Woops
         self.shack.process_pv_messages(0)
         self.assertEqual(self.shack.pv_watts, 0)
-        self.assertEqual(self.shack.sun_state, 3)
+        self.assertEqual(self.shack.sun_state, 2)
+
+        self.shack.process_pv_messages(0)
+        self.assertEqual(self.shack.pv_watts, 0)
+        self.assertEqual(self.shack.sun_state, 2)
 
         # Should get welcome
         self.shack.process_pv_messages(100)
         self.assertEqual(self.shack.pv_watts, 100)
-        self.assertEqual(self.shack.sun_state, 2)
+        self.assertEqual(self.shack.sun_state, 3)
+
+        self.shack.process_pv_messages(100)
+        self.assertEqual(self.shack.pv_watts, 100)
+        self.assertEqual(self.shack.sun_state, 3)
 
         # Need to test for state 4
+        # Should get welcome
+        
+        self.shack.process_pv_messages(0)
+        self.assertEqual(self.shack.pv_watts, 0)
+        self.assertEqual(self.shack.sun_state, 3)
+        self.shack.sun = False
+        self.shack.process_pv_messages(0)
+        self.assertEqual(self.shack.pv_watts, 0)
+        self.assertEqual(self.shack.sun_state, 0)
 
     # Tested using wind_speed thresholds.
     def test_ok_send_wx(self):
