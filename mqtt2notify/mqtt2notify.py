@@ -537,7 +537,6 @@ class ShackData(threading.Thread):
             notify("PV Update", myMsg)
             logger.debug(myMsg)
 
-
     # Serial to parallel convertor
     def process_wx_messages(self, topic, payload):
         myMsg = ""
@@ -545,43 +544,42 @@ class ShackData(threading.Thread):
             self.set_wind_direction(payload)
         elif topic == PREFIX+"/wind_speed":
             self.set_wind_speed(payload)
-            myMsg = "Wind speed is {:3.2f} km/h ({:3.2f})".format(float(payload) * 3.6,
-                                                                      float(self.wind_speed) * 3.6)
-        #
+            myMsg = "Wind speed is %3.1f km/h %s" % (float(self.wind_speed) * 3.6, self.wind_text)
         elif topic == PREFIX+"/wind_gust":
             if self.wind_gust >= self.max_wind_gust:
                 self.set_wind_gust(payload)
-                myMsg = "Wind gust is {:3.2f} km/h ({:3.2f})".format(float(payload) * 3.6, float(self.wind_gust) * 3.6)
+                myMsg = "Wind gust is %3.1f km/h" % (float(self.wind_gust) * 3.6)
         #
         elif topic == PREFIX+"/temperature":
             self.set_temperature(payload)
             if self.min_temperature != self.max_temperature:
-                myMsg = "Temperature is %2.1fC (%2.1f, %2.1f) " % (self.temperature, self.min_temperature, self.max_temperature)
+                myMsg = "Temperature is %2.1f Deg.C (%2.1f, %2.1f) " % (self.temperature, self.min_temperature, self.max_temperature)
             else:
-                myMsg = "Temperature is %2.1fC" % self.temperature
+                myMsg = "Temperature is %2.1f Deg.C" % self.temperature
         #
         elif topic == PREFIX+"/rain_1h":
-            myMsg = "Rain for last hour is "+payload+" mm"
             self.set_rain_1h(payload)
+            myMsg = "Rain for last hour is %2.1f mm" % self.rain_1h
         #
         elif topic == PREFIX+"/rain_24h":
-            myMsg = "Rain for last 24hours is "+payload+" mm"
             self.set_rain_24h(payload)
+            myMsg = "Rain for last 24hours %2.1f mm" % self.rain_24h
+
         #
         elif topic == PREFIX+"/humidity":
             self.set_humidity(payload)
             if self.max_humidity != self.min_humidity:
-                myMsg = "Humidity is "+payload+"% ("+str(self.min_humidity)+", "+str(self.max_humidity)+")"
+                myMsg = "Humidity is %d%% (%d, %d)" % (self.humidity, self.min_humidity, self.max_humidity)
             else:
-                myMsg = "Humidity is "+payload
+                myMsg = "Humidity is %d%%" % self.humidity
         #
         elif topic == PREFIX+"/pressure":
             # Always set to keep 'rising/falling' up-to-date
             self.set_pressure(payload)
-            if self.pressure != float(payload):
-                myMsg = "Pressure is "+payload+" hPa ("+str(self.min_pressure)+", "+str(self.max_pressure)+")"+" "+self.pressure_direction
+            if self.min_pressure != self.max_pressure:
+                myMsg = "Pressure is %4.1f hPa (%4.1f, %4.1f) %s" % (self.pressure, self.min_pressure, self.max_pressure, self.pressure_direction)
             else:
-                myMsg = "Pressure is "+payload+" hPa "
+                myMsg = "Pressure is %4.1f hPa" % self.pressure
         else:
             logger.debug("Unknown Weather Value %s:%s" % (topic, payload))
         # If the parameter hasn't changed, then myMsg will be blank.
@@ -614,12 +612,11 @@ def on_connect(client, userdata, flags, rc):
     logger.debug("Connected with result code "+str(rc))
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
-    client.subscribe([("house/debug", 0),
-                      ("wx/EI7IG-1/#", 0),
-                      ("house/office/sat/#", 0),
-                      ("house/energy/owl/pv", 0),
-                      ("house/energy/battery/voltage/#", 0)])
-#   client.subscribe(parser.get('mqtt', 'topics'))
+    topic_list = []
+    for item in parser.get('mqtt', 'topics').split(','):
+        topic_list.append((item.lstrip(), 0))
+    logger.info("Topic list is: %s" % topic_list)
+    client.subscribe(topic_list)
     logger.info("Subscribed")
 
 
