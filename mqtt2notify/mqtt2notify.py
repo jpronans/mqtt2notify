@@ -78,7 +78,6 @@ class ShackData(threading.Thread):
         self.lock = threading.Lock()
         threading.Thread.__init__(self)
         self.get_sunset_sunrise()
-        #self.check_sun_up()
         self.api = ''
         self.tweet = parser.getboolean('twitter', 'tweet')
 
@@ -89,7 +88,7 @@ class ShackData(threading.Thread):
         # Loop until told otherwise
         while (not exit_me):
             now = datetime.now()
-            # Check here.
+            # Checks here.
             self.reset_max_min(now)
             self.check_sun_up(now)
 
@@ -105,8 +104,9 @@ class ShackData(threading.Thread):
             time.sleep(1.0)
 
     def send_wx_message(self, now):
-        # Make sure there are sensible temparture and max and min values before displaying anything
-        if(self.min_temperature != self.max_temperature) or self.humidity != 0:
+        # Make sure there are sensible temparture max and min values
+        # before displaying them
+        if self.min_temperature != self.max_temperature:
             status1 = "%02.0f:%02.0f Temp %2.1fC (%2.1f, %2.1f) " % (now.hour, now.minute, self.temperature, self.min_temperature, self.max_temperature)
         else:
             status1 = "%02.0f:%02.0f Temp %2.1fC " % (now.hour, now.minute, self.temperature)
@@ -139,8 +139,6 @@ class ShackData(threading.Thread):
             except Exception:
                 logger.info("Caught tweety exception")
                 pass
-        else:
-            logger.debug("self.tweet is False")
 
     def ok_send_setting(self, now):
         if(now < self.next_setting and
@@ -156,47 +154,38 @@ class ShackData(threading.Thread):
         else:
             return False
 
-    # Niave method
     def get_wx_interval(self):
-        level = self.get_wx_warning_level()
-        if level == 0:
-            return 120
-        elif level == 1:
-            return 60
-        elif level == 2:
-            return 30
-        elif level == 3:
-            return 15
-
-    def get_wx_warning_level(self):
         if(self.wind_warning == 1 or
            self.wind_gust_warning == 1 or
            self.temp_warning == 1 or
            self.rain_1h_warning == 1 or
            self.rain_24h_warning == 1):
             self.warning_text = " Yellow Alert"
-            return 1
+            return 60
         elif(self.wind_warning == 2 or
              self.wind_gust_warning == 2 or
              self.temp_warning == 2 or
              self.rain_1h_warning == 2 or
              self.rain_24h_warning == 2):
             self.warning_text = " Orange Alert"
-            return 2
+            return 30
         elif(self.wind_warning == 3 or
              self.wind_gust_warning == 3 or
              self.temp_warning == 3 or
              self.rain_1h_warning == 3 or
              self.rain_24h_warning == 3):
             self.warning_text = " Red Alert"
-            return 3
+            return 15
         else:
             self.warning_text = ""
-            return 0
+            return 120
 
     def ok_send_wx(self, now):
         interval = self.get_wx_interval()
-        if self.min_temperature != self.max_temperature and now.second == 15:
+        # Max an min can be the same as long as humidity > 0
+        # otherwise don't print anything
+        if((self.min_temperature != self.max_temperature or self.humidity > 0) and
+           now.second == 15):
             # 120 minute intervals, even hour, 15 seconds past the 0 minute
             if(interval == 120 and
                now.hour % 2 == 0 and
@@ -223,14 +212,6 @@ class ShackData(threading.Thread):
                 return True
             else:
                 return False
-
-    def check_interval(self, value):
-        now = datetime.now()
-        difference = now - self.time_stamp()
-        if difference.total_seconds() >= value:
-            return True
-        else:
-            return False
 
     def get_sunset_sunrise(self):
         o = ephem.Observer()
@@ -275,13 +256,11 @@ class ShackData(threading.Thread):
                 self.wind_warning = 2
             elif float(value) >= 80 / 3.6:
                 self.wind_warning = 3
-            #if self.wind_warning > 0:
-            #    logger.debug("wind warning level is: %d" % self.wind_warning)
 
     def set_wind_gust(self, value):
         with self.lock:
             self.wind_gust = float(value)
-            # If the value is greater than existing or 0 or  new day.
+            # If the value is greater than existing or 0 or new day.
             if value > self.max_wind_gust:
                 self.max_wind_gust = value
             # Warnings and update interval
@@ -293,13 +272,11 @@ class ShackData(threading.Thread):
                 self.wind_gust_warning = 2
             elif float(value) >= 130 / 3.6:
                 self.wind_gust_warning = 3
-            #if self.wind_gust_warning > 0:
-            #    logger.debug("wind_gust warning level is: %d" % self.wind_gust_warning)
 
+    # see https://en.wikipedia.org/wiki/Points_of_the_compass#Compass_point_names
     def set_wind_direction(self, value):
         with self.lock:
             self.wind_direction = int(value)
-        # see https://en.wikipedia.org/wiki/Points_of_the_compass#Compass_point_names
         if 5.63 <= int(value) <= 16.87:
             self.set_wind_cardinal("NbE")
         elif 16.88 <= int(value) <= 28.12:
@@ -397,8 +374,6 @@ class ShackData(threading.Thread):
                 self.temp_warning = 1
             else:
                 self.temp_warning = 0
-            #if self.temp_warning > 0:
-            #    logger.debug("temp warning level is: %d" % self.temp_warning)
 
     def set_rain_1h(self, value):
         with self.lock:
@@ -416,8 +391,6 @@ class ShackData(threading.Thread):
             # < 20mm in 6h
             else:
                 self.rain_1h_warning = 0
-            #if self.rain_1h_warning > 0:
-            #    logger.debug("rain_1h warning level is: %d" % self.rain_1h_warning)
 
     def set_rain_24h(self, value):
         with self.lock:
@@ -435,9 +408,6 @@ class ShackData(threading.Thread):
             # < 30mm in 24h
             else:
                 self.rain_24h_warning = 0
-
-            #if self.rain_24h_warning > 0:
-            #    logger.debug("rain_24h warning level is: %d" % self.rain_24h_warning)
 
     def set_humidity(self, value):
         with self.lock:
@@ -468,14 +438,11 @@ class ShackData(threading.Thread):
     def set_pv_watts(self, value):
         # Values < 0 not possible
         if self.is_sun_up():
-            self.pv_watts = int(value)
-            self.pv_samples = int(self.pv_samples + 1)
-            self.pv_total = int(self.pv_total) + int(value)
-            self.pv_average = float(self.pv_total / self.pv_samples)
-
-    def set_battery_volts(self, value):
-        # Values < 0 not possible
-        self.battery_volts = float(value)
+            with self.lock:
+                self.pv_watts = int(value)
+                self.pv_samples = int(self.pv_samples + 1)
+                self.pv_total = int(self.pv_total) + int(value)
+                self.pv_average = float(self.pv_total / self.pv_samples)
 
     def check_sun_up(self, now):
         # Case 2. Started up after sunrise
@@ -490,11 +457,13 @@ class ShackData(threading.Thread):
                 self.sun = True
             return True
         else:
-            self.sun = False
-            return False
+            with self.lock:
+                self.sun = False
+                return False
 
     def sun_up(self):
-        self.sun = True
+        with self.lock:
+            self.sun = True
 
     def is_sun_up(self):
         return self.sun
@@ -564,8 +533,10 @@ class ShackData(threading.Thread):
                 myMsg = ""
 
         if myMsg != "":
-            self.send_tweet(payload)
+            self.send_tweet(myMsg)
             notify("PV Update", myMsg)
+            logger.debug(myMsg)
+
 
     # Serial to parallel convertor
     def process_wx_messages(self, topic, payload):
@@ -581,31 +552,26 @@ class ShackData(threading.Thread):
             if self.wind_gust >= self.max_wind_gust:
                 self.set_wind_gust(payload)
                 myMsg = "Wind gust is {:3.2f} km/h ({:3.2f})".format(float(payload) * 3.6, float(self.wind_gust) * 3.6)
-            else:
-                logger.debug("Wind gust has not changed")
         #
         elif topic == PREFIX+"/temperature":
             self.set_temperature(payload)
-            myMsg = "Temperature is "+payload+" Deg.C"
+            if self.min_temperature != self.max_temperature:
+                myMsg = "Temperature is %2.1fC (%2.1f, %2.1f) " % (self.temperature, self.min_temperature, self.max_temperature)
+            else:
+                myMsg = "Temperature is %2.1fC" % self.temperature
         #
         elif topic == PREFIX+"/rain_1h":
-            if self.rain_1h != payload:
-                myMsg = "Rain for last hour is "+payload+" mm"
-                self.set_rain_1h(payload)
-            else:
-                logger.debug("No Rain in last hour")
+            myMsg = "Rain for last hour is "+payload+" mm"
+            self.set_rain_1h(payload)
         #
         elif topic == PREFIX+"/rain_24h":
-            if self.rain_24h != payload:
-                myMsg = "Rain for last 24hours is "+payload+" mm"
-                self.set_rain_24h(payload)
-            else:
-                logger.debug("No Rain in last 24 hours")
+            myMsg = "Rain for last 24hours is "+payload+" mm"
+            self.set_rain_24h(payload)
         #
         elif topic == PREFIX+"/humidity":
             self.set_humidity(payload)
             if self.max_humidity != self.min_humidity:
-                myMsg = "Humidity is "+payload+"% ("+str(self.min_humidity)+","+str(self.max_humidity)+")"
+                myMsg = "Humidity is "+payload+"% ("+str(self.min_humidity)+", "+str(self.max_humidity)+")"
             else:
                 myMsg = "Humidity is "+payload
         #
@@ -613,7 +579,7 @@ class ShackData(threading.Thread):
             # Always set to keep 'rising/falling' up-to-date
             self.set_pressure(payload)
             if self.pressure != float(payload):
-                myMsg = "Pressure is "+payload+" hPa ("+str(self.min_pressure)+","+str(self.max_pressure)+")"+" "+self.pressure_direction
+                myMsg = "Pressure is "+payload+" hPa ("+str(self.min_pressure)+", "+str(self.max_pressure)+")"+" "+self.pressure_direction
             else:
                 myMsg = "Pressure is "+payload+" hPa "
         else:
@@ -621,20 +587,16 @@ class ShackData(threading.Thread):
         # If the parameter hasn't changed, then myMsg will be blank.
         if myMsg != "":
             notify("Weather Update", myMsg)
-            logger.info(myMsg)
+            logger.debug(myMsg)
 
     def process_sat_messages(self, payload):
-        # Only send after dark
+        # Only tweet if the ISS is potentially visible from the ground
         if("ISS" in payload and
-           "visible" in payload):  # and Visible in payload:
+           "visible" in payload):
             self.send_tweet(payload)
-            logger.info(payload)
+            notify("Sat Update", payload)
         else:
             notify("Sat Update", payload)
-            logger.info(payload)
-
-    def process_battery_messages(self, payload):
-        self.set_battery_volts(payload)
 
 
 # Send desktop notification.
@@ -667,8 +629,6 @@ def on_message(client, MyShack, msg):
     # Output from the cc128 perl scripts
     if msg.topic == "house/energy/owl/pv":
         MyShack.process_pv_messages(msg.payload)
-    elif msg.topic == "house/energy/battery/voltage":
-        MyShack.process_battery_messages(msg.payload)
     # Control Messages
     elif msg.topic == "house/debug":
         #
@@ -706,7 +666,8 @@ def main():
         auth.set_access_token(parser.get('twitter', 'access_key'),
                               parser.get('twitter', 'access_secret'))
         MyShack.api = tweepy.API(auth)
-
+    else:
+        logger.debug("Tweeting disabled")
     MyShack.start()
 
     client = mqtt.Client(parser.get('mqtt', 'clientname'),

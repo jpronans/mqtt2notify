@@ -13,22 +13,6 @@ class mqtt2notifyTest(unittest.TestCase):
 #    def tearDown(self):
 #        self.mox.UnsetStubs()
 
-    # Has the time interval elapsed
-    def test_check_interval(self):
-        # Should be false
-        self.assertFalse(self.shack.check_interval(60))
-        # Time difference is now 1 hour
-        now = datetime.now()
-        one_hour = timedelta(hours=1)
-        # Set tome to 1 hour in the past
-        self.shack.set_time_stamp(now - one_hour)
-        # We know we have moved one hour so this should be true
-        # We have moved more than 3500 seconds
-        self.assertTrue(self.shack.check_interval(3500))
-        # This should be false.
-        # We have not moved more than 3700 seconds
-        self.assertFalse(self.shack.check_interval(3700))
-
     def test_wind_speed_zero(self):
         self.shack.set_wind_speed(0)
         self.assertEqual(self.shack.wind_speed, 0)
@@ -282,7 +266,6 @@ class mqtt2notifyTest(unittest.TestCase):
 
         # Need to test for state 4
         # Should get welcome
-        
         self.shack.process_pv_messages(0)
         self.assertEqual(self.shack.pv_watts, 0)
         self.assertEqual(self.shack.sun_state, 3)
@@ -319,8 +302,6 @@ class mqtt2notifyTest(unittest.TestCase):
 
         # Level 1 should kick in hourly updates
         self.shack.set_wind_speed(51/3.6)
-        #self.shack.max_temperature = 1
-        #self.shack.set_temperature(-4)
         hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
                       '12', '13', '14', '15', '16', '17', '18', '19', '20',
                       '21', '22', '23']
@@ -338,9 +319,6 @@ class mqtt2notifyTest(unittest.TestCase):
                 self.assertFalse(self.shack.ok_send_wx(now))
 
         # Level 2 should kick in 30 minute updates
-        #self.shack.min_temperature = 21
-        #self.shack.max_temperature = 22
-        #self.shack.set_temperature(23)
         self.shack.set_wind_speed(66/3.6)
         hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
                       '12', '13', '14', '15', '16', '17', '18', '19', '20',
@@ -364,8 +342,6 @@ class mqtt2notifyTest(unittest.TestCase):
 
         # Level 3 15 minute intervals
         self.shack.set_wind_speed(81/3.6)
-        #self.shack.set_temperature = float(-30)
-        #self.shack.set_temperature = float(-20)
         hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
                       '12', '13', '14', '15', '16', '17', '18', '19', '20',
                       '21', '22']
@@ -524,10 +500,7 @@ class mqtt2notifyTest(unittest.TestCase):
         self.shack.set_temperature(-2)
         self.shack.set_temperature(+3)
         self.shack.set_wind_direction(100)
-        # Level 0 Temperature should print wx info on the 60 minute mark
-        # Just below thresholds
         self.shack.set_temperature(4)
-        #self.shack.set_temperature(1)
         # Level 0 Temperature should print wx info on the 60 minute mark
         # Just below thresholds
         collection = ['3', '2', '1', '0', '-1', '-2']
