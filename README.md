@@ -15,6 +15,7 @@ A small program using MQTT to listen to the output of various processes running 
     server = 127.0.0.1
     port = 1883
     clientname = mqtt2notify
+    topics = wx/EI7IG-1/#, house/office/sat/#, house/energy/owl/pv
     
     [gps]
     lat = 52.0000
