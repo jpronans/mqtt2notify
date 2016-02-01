@@ -505,28 +505,28 @@ class ShackData(threading.Thread):
 
     def process_pv_messages(self, payload):
         myMsg = ""
+        now = datetime.now()
         # Have We PV output?
         # Until dawn, do nothing
         if(self.is_sun_up()):
             # Passed Dawn, now if we have PV output, sun is up
             # and it hasn't just gone behind a cloud
             if(int(payload) > 0 and self.sun_state == 0):
-                myMsg = "The Sky's awake so I'm awake (PV online)"
+                myMsg = "%02.0f:%02.0f The Sky's awake so I'm awake (PV online)" % (now.hour, now.minute)
                 self.sun_state = 1
             # Passed Dawn, sun was up but has dropped
-            elif(int(payload) == 0 and self.sun_state == 1):
-                myMsg = "PV offline"
+            elif(int(payload) == 0 and (self.sun_state == 1 or self.sun_state == 3)):
+                myMsg = "%02.0f:%02.0f PV offline (%d)" % (now.hour, now.minute, self.pv_watts)
                 self.sun_state = 2
             # Passed Dawn, sun was up, dropped and has come back
             elif(int(payload) > 0 and self.sun_state == 2):
-                myMsg = "PV back online"
+                myMsg = "%02.0f:%02.0f PV back online" % (now.hour, now.minute)
                 self.sun_state = 3
             # Set wattage
             self.set_pv_watts(payload)
         else:
-            # Past Sundown and we haven't already sent the message
+            # Past Sundown
             if self.sun_state != 0:
-                myMsg = "Sunset"
                 self.sun_state = 0
             else:
                 self.sun_state = 0

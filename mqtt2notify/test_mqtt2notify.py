@@ -169,10 +169,11 @@ class mqtt2notifyTest(unittest.TestCase):
 
     def test_reset_max_min(self):
         today = date.today()
+        yesterday = date.today() - timedelta(days=1)
         self.shack.pv_average = 10
         today = date.today()
         # Yesterday, 23:59
-        self.shack.today = datetime(today.year, today.month, today.day - 1, 23, 59, 00)
+        self.shack.today = datetime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 00)
         # Today 16 seconds past midnight
         self.assertTrue(self.shack.reset_max_min(datetime(today.year, today.month, today.day, 00, 00, 16)))
         # No need to check all of them
@@ -199,10 +200,7 @@ class mqtt2notifyTest(unittest.TestCase):
         # Case 1. After Sunrise
         if now < self.next_setting and self.shack.today == date.today():
             self.assertTrue(self.shack.check_sun_up(now))
-        # Are we before sunrise or after sunset?
-        #if now < self.shack.next_rising or now > self.shack.next_setting:
-        #    self.assertFalse(self.shack.check_sun_up(now))
-        # Case 2 
+        # Case 2
         if self.next_rising <= now <= self.next_setting:
             # Sun should be up so
             self.assertTrue(self.shack.check_sun_up(now))
@@ -242,8 +240,8 @@ class mqtt2notifyTest(unittest.TestCase):
         self.assertEqual(self.shack.pv_watts, 100)
         self.assertEqual(self.shack.sun_state, 1)
 
-        self.shack.process_pv_messages(100)
-        self.assertEqual(self.shack.pv_watts, 100)
+        self.shack.process_pv_messages(101)
+        self.assertEqual(self.shack.pv_watts, 101)
         self.assertEqual(self.shack.sun_state, 1)
 
         # Should get Woops
@@ -256,19 +254,19 @@ class mqtt2notifyTest(unittest.TestCase):
         self.assertEqual(self.shack.sun_state, 2)
 
         # Should get welcome
-        self.shack.process_pv_messages(100)
-        self.assertEqual(self.shack.pv_watts, 100)
+        self.shack.process_pv_messages(102)
+        self.assertEqual(self.shack.pv_watts, 102)
         self.assertEqual(self.shack.sun_state, 3)
 
-        self.shack.process_pv_messages(100)
-        self.assertEqual(self.shack.pv_watts, 100)
+        self.shack.process_pv_messages(103)
+        self.assertEqual(self.shack.pv_watts, 103)
         self.assertEqual(self.shack.sun_state, 3)
 
         # Need to test for state 4
         # Should get welcome
         self.shack.process_pv_messages(0)
         self.assertEqual(self.shack.pv_watts, 0)
-        self.assertEqual(self.shack.sun_state, 3)
+        self.assertEqual(self.shack.sun_state, 2)
         self.shack.sun = False
         self.shack.process_pv_messages(0)
         self.assertEqual(self.shack.pv_watts, 0)
