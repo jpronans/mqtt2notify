@@ -542,6 +542,7 @@ class ShackData(threading.Thread):
         myMsg = ""
         if topic == PREFIX+"/wind_direction":
             self.set_wind_direction(payload)
+            myMsg = "Wind direction is %d %s" % (self.wind_direction, self.wind_cardinal)
         elif topic == PREFIX+"/wind_speed":
             self.set_wind_speed(payload)
             myMsg = "Wind speed is %3.1f km/h %s" % (float(self.wind_speed) * 3.6, self.wind_text)
