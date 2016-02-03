@@ -142,6 +142,8 @@ class ShackData(threading.Thread):
 
     def ok_send_setting(self, now):
         if(now < self.next_setting and
+           now.hour == 12 and
+           now.minute == 0 and
            now.date() == self.next_setting.date()):
             return True
         else:
@@ -149,6 +151,8 @@ class ShackData(threading.Thread):
 
     def ok_send_rising(self, now):
         if(now < self.next_rising and
+           now.hour == 0 and
+           now.minute == 0 and
            now.date() == self.next_rising.date()):
             return True
         else:
@@ -594,8 +598,10 @@ class ShackData(threading.Thread):
            "visible" in payload):
             self.send_tweet(payload)
             notify("Sat Update", payload)
+            logger.debug(payload)
         else:
             notify("Sat Update", payload)
+            logger.debug(payload)
 
 
 # Send desktop notification.

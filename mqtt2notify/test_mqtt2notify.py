@@ -363,15 +363,15 @@ class mqtt2notifyTest(unittest.TestCase):
                                           temp.month,
                                           temp.day, 8, 23)
         # 3am should be false
-        now = datetime(temp.year, temp.month, temp.day, 04, 15)
+        now = datetime(temp.year, temp.month, temp.day, 00, 00)
         self.assertTrue(self.shack.ok_send_rising(now))
         # # 4:00:10 should be True
-        now = datetime(temp.year, temp.month, temp.day, 06, 00, 15)
-        self.assertTrue(self.shack.ok_send_rising(now))
+        now = datetime(temp.year, temp.month, temp.day, 00, 01)
+        self.assertFalse(self.shack.ok_send_rising(now))
         self.shack.send_wx_message(now)
         # # 8:00:10 am should still be true
-        now = datetime(temp.year, temp.month, temp.day, 8, 00, 10)
-        self.assertTrue(self.shack.ok_send_rising(now))
+        now = datetime(temp.year, temp.month, temp.day, 8, 00, 30)
+        self.assertFalse(self.shack.ok_send_rising(now))
         # # 12:00:10 should be false
         now = datetime(temp.year, temp.month, temp.day, 12, 00, 15)
         self.assertFalse(self.shack.ok_send_rising(now))
@@ -384,12 +384,12 @@ class mqtt2notifyTest(unittest.TestCase):
                                            temp.month,
                                            temp.day, 18, 23)
         # As long as sun is up. Anytime should be ok.
-        now = datetime(temp.year, temp.month, temp.day, 12, 00, 15)
+        now = datetime(temp.year, temp.month, temp.day, 12, 00)
         self.assertTrue(self.shack.ok_send_setting(now))
         self.shack.send_wx_message(now)
         # should be False
-        now = datetime(temp.year, temp.month, temp.day, 04, 00, 0)
-        self.assertTrue(self.shack.ok_send_setting(now))
+        now = datetime(temp.year, temp.month, temp.day, 12, 01)
+        self.assertFalse(self.shack.ok_send_setting(now))
         # should be false
         now = datetime(temp.year, temp.month, temp.day, 23, 00, 00)
         self.assertFalse(self.shack.ok_send_setting(now))
