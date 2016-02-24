@@ -182,7 +182,7 @@ class ShackData(threading.Thread):
             return 15
         else:
             self.warning_text = ""
-            return 120
+            return 240
 
     def ok_send_wx(self, now):
         interval = self.get_wx_interval()
@@ -191,8 +191,8 @@ class ShackData(threading.Thread):
         if((self.min_temperature != self.max_temperature or self.humidity > 0) and
            now.second == 15):
             # 120 minute intervals, even hour, 15 seconds past the 0 minute
-            if(interval == 120 and
-               now.hour % 2 == 0 and
+            if(interval == 240 and
+               now.hour % 4 == 0 and
                now.minute == 0):
                 return True
             # 60 minute interval, every hour, 15 second past the 0 minute
@@ -426,9 +426,9 @@ class ShackData(threading.Thread):
         with self.lock:
             if self.pressure != 0:
                 if float(value) > self.pressure + 0.2:
-                    self.pressure_direction = ' and rising '
+                    self.pressure_direction = ' and rising'
                 elif float(value) < self.pressure - 0.2:
-                    self.pressure_direction = ' and falling '
+                    self.pressure_direction = ' and falling'
                 else:
                     self.pressure_direction = ' '
 
@@ -483,7 +483,7 @@ class ShackData(threading.Thread):
     def reset_max_min(self, now):
         if self.today != date.today():
             # Tweet happens at 15 seconds past the hour
-            if now.second > 15:
+            if now.second > 5:
                 logger.info("Resetting max/min")
                 with self.lock:
                     self.wind_speed = 0
@@ -532,6 +532,7 @@ class ShackData(threading.Thread):
             # Past Sundown
             if self.sun_state != 0:
                 self.sun_state = 0
+                logger.debug("Settings sun_state to 0")
             else:
                 self.sun_state = 0
                 myMsg = ""
