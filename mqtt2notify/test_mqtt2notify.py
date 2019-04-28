@@ -3,7 +3,7 @@ import mqtt2notify
 import time
 from datetime import date, datetime, timedelta
 import ephem
-import mox
+#import mox
 
 
 class mqtt2notifyTest(unittest.TestCase):
@@ -12,6 +12,90 @@ class mqtt2notifyTest(unittest.TestCase):
         self.timestamp = self.shack.time_stamp()
 #    def tearDown(self):
 #        self.mox.UnsetStubs()
+
+    def test_check_warning_interval(self):
+        self.shack.wind_warning = 3
+        self.shack.check_warning_interval()
+        self.assertEqual(self.shack.warning_interval, 15)
+        self.shack.wind_warning = 0
+        # 
+        self.shack.temp_warning = 2
+        self.shack.check_warning_interval()
+        self.assertEqual(self.shack.warning_interval, 30)
+        self.shack.temp_warning = 0
+        #
+        self.shack.wind_warning = 1
+        self.shack.check_warning_interval()
+        self.assertEqual(self.shack.warning_interval, 60)
+        self.shack.wind_warning = 0
+        #
+        self.shack.rain_1h_warning = 0
+        self.shack.check_warning_interval()
+        self.assertEqual(self.shack.warning_interval, 240)
+        self.shack.rain_24h_warning = 4
+        self.shack.check_warning_interval()
+        self.assertEqual(self.shack.warning_interval, 240)
+        self.shack.rain_24h_warning = -1
+        self.shack.check_warning_interval()
+        self.assertEqual(self.shack.warning_interval, 240)
+
+	#
+        self.shack.wind_warning = 3 
+        self.shack_temp_warning = 2
+        self.shack_rain_1h_warning = 1
+        self.shack.check_warning_interval()
+        self.assertEqual(self.shack.warning_interval, 15)
+
+    def test_warning_suffix(self):
+        self.shack.rain_1h_warning = 0
+        self.shack.temp_warning = 0
+        self.shack.wind_warning = 1
+        self.shack.wind_gust_warning = 0
+        self.shack.set_warning_suffix()
+        self.assertEqual(self.shack.warning_text, " Wind Warning")
+        self.shack.wind_warning = 0
+        # 
+        self.shack.warning_text = ""
+        self.shack.temp_warning = 1
+        self.shack.set_warning_suffix()
+        self.assertEqual(self.shack.warning_text, " Temperature Warning")
+        #
+        self.shack.warning_text = ""
+        self.shack.wind_warning = 0
+        self.shack.temp_warning = 0
+        self.shack.rain_1h_warning = 1
+        self.shack.set_warning_suffix()
+        self.assertEqual(self.shack.warning_text, " Rainfall Warning")
+        self.shack.rain_1h_warning = 0
+        #
+        self.shack.warning_text = ""
+        self.shack.wind_warning = 0
+        self.shack.temp_warning = 1
+        self.shack.rain_24h_warning = 1
+        self.shack.set_warning_suffix()
+        self.assertEqual(self.shack.warning_text, " Temperature and Rainfall Warning")
+        self.shack.rain_1h_warning = 0
+        #
+        #
+        self.shack.warning_text = ""
+        self.shack.wind_warning = 1
+        self.shack.temp_warning = 0
+        self.shack.rain_24h_warning = 1
+        self.shack.set_warning_suffix()
+        self.assertEqual(self.shack.warning_text, " Wind and Rainfall Warning")
+        self.shack.rain_1h_warning = 0
+
+        #
+        self.shack.warning_text = ""
+        self.shack.wind_warning = 1
+        self.shack.temp_warning = 1
+        self.shack.rain_1h_warning = 1
+        self.shack.set_warning_suffix()
+        self.assertEqual(self.shack.warning_text, " Temperature, Rainfall and Wind Warning")
+        self.shack.rain_1h_warning = 0
+ 
+
+
 
     def test_wind_speed_zero(self):
         self.shack.set_wind_speed(0)
@@ -115,14 +199,14 @@ class mqtt2notifyTest(unittest.TestCase):
         self.assertEqual(self.shack.pressure, 15)
         self.assertEqual(self.shack.min_pressure, 10.5)
         self.assertEqual(self.shack.max_pressure, 15)
-        self.assertEqual(self.shack.pressure_direction, ' and rising ')
+        self.assertEqual(self.shack.pressure_direction, ' and rising')
 
         # Min should decrease
         self.shack.set_pressure(5)
         self.assertEqual(self.shack.pressure, 5)
         self.assertEqual(self.shack.min_pressure, 5)
         self.assertEqual(self.shack.max_pressure, 15)
-        self.assertEqual(self.shack.pressure_direction, ' and falling ')
+        self.assertEqual(self.shack.pressure_direction, ' and falling')
 
         # Min should decrease
         self.shack.set_pressure(5)
@@ -136,14 +220,14 @@ class mqtt2notifyTest(unittest.TestCase):
         self.assertEqual(self.shack.pressure, 4)
         self.assertEqual(self.shack.min_pressure, 4)
         self.assertEqual(self.shack.max_pressure, 15)
-        self.assertEqual(self.shack.pressure_direction, ' and falling ')
+        self.assertEqual(self.shack.pressure_direction, ' and falling')
 
         # Max should increase
         self.shack.set_pressure(10)
         self.assertEqual(self.shack.pressure, 10)
         self.assertEqual(self.shack.min_pressure, 4)
         self.assertEqual(self.shack.max_pressure, 15)
-        self.assertEqual(self.shack.pressure_direction, ' and rising ')
+        self.assertEqual(self.shack.pressure_direction, ' and rising')
 
     def test_set_pv_watts(self):
         self.shack.pv_watts = 0
@@ -279,19 +363,18 @@ class mqtt2notifyTest(unittest.TestCase):
         # If Max/Min are the same ok_send_wx will fail.
         self.shack.set_temperature(10)
         self.shack.set_temperature(9)
-        hours = ['0', '2', '4', '6', '8', '10', '12',
-                      '14', '16', '18', '20', '22']
+        hours = ['0', '4', '8',  '12', '16', '20']
         for hour in hours:
             now = datetime(temp.year, temp.month, temp.day, int(hour), 00, 15)
-            # Should be ok to print on an even 2 hour time
+            # Should be ok to print on an even 4 hour time
             self.assertTrue(self.shack.ok_send_wx(now))
 
-        hours = ['1', '3', '5', '7', '9', '11',
-                      '13', '15', '17', '19', '21', '23']
+        hours = ['1', '2', '3', '5', '6','7', '9', '10', '11',
+                      '13', '14', '15', '17', '18', '19', '21', '22', '23']
 
         for hour in hours:
             now = datetime(temp.year, temp.month, temp.day, int(hour), 00, 15)
-            # Should be ok to print on an even 2 hour time
+            # Should be ok to print on an even 4 hour time
             self.assertFalse(self.shack.ok_send_wx(now))
 
         hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
@@ -351,7 +434,7 @@ class mqtt2notifyTest(unittest.TestCase):
 
         self.shack.min_temperature = 0
         self.shack.max_temperature = 0
-        print "Calling send_wx_message"
+        print ("Calling send_wx_message")
         self.shack.send_wx_message(now)
         self.assertFalse(self.shack.ok_send_wx(now))
 
@@ -363,17 +446,17 @@ class mqtt2notifyTest(unittest.TestCase):
                                           temp.month,
                                           temp.day, 8, 23)
         # 3am should be false
-        now = datetime(temp.year, temp.month, temp.day, 00, 00)
+        now = datetime(temp.year, temp.month, temp.day, 0, 0)
         self.assertTrue(self.shack.ok_send_rising(now))
         # # 4:00:10 should be True
-        now = datetime(temp.year, temp.month, temp.day, 00, 01)
+        now = datetime(temp.year, temp.month, temp.day, 0, 1)
         self.assertFalse(self.shack.ok_send_rising(now))
         self.shack.send_wx_message(now)
         # # 8:00:10 am should still be true
-        now = datetime(temp.year, temp.month, temp.day, 8, 00, 30)
+        now = datetime(temp.year, temp.month, temp.day, 8, 0, 30)
         self.assertFalse(self.shack.ok_send_rising(now))
         # # 12:00:10 should be false
-        now = datetime(temp.year, temp.month, temp.day, 12, 00, 15)
+        now = datetime(temp.year, temp.month, temp.day, 12, 0, 15)
         self.assertFalse(self.shack.ok_send_rising(now))
 
     # Gated by test_ok_send_wx so no need for second or minute limits
@@ -388,7 +471,7 @@ class mqtt2notifyTest(unittest.TestCase):
         self.assertTrue(self.shack.ok_send_setting(now))
         self.shack.send_wx_message(now)
         # should be False
-        now = datetime(temp.year, temp.month, temp.day, 12, 01)
+        now = datetime(temp.year, temp.month, temp.day, 12, 1)
         self.assertFalse(self.shack.ok_send_setting(now))
         # should be false
         now = datetime(temp.year, temp.month, temp.day, 23, 00, 00)
@@ -398,7 +481,7 @@ class mqtt2notifyTest(unittest.TestCase):
         temp = datetime.today()
 
         # Sun not up yet. False
-        now = datetime(temp.year, temp.month, temp.day, 06, 45, 20)
+        now = datetime(temp.year, temp.month, temp.day, 6, 45, 20)
         self.assertFalse(self.shack.ok_send_telemetry(now))
         #
         now = datetime(temp.year, temp.month, temp.day, 12, 45, 20)
@@ -416,9 +499,9 @@ class mqtt2notifyTest(unittest.TestCase):
         now = datetime.now()
         self.shack.pv_average = 100
         self.shack.pv_watts = 120
-        print "Calling send_telemetry_message"
+        print ("Calling send_telemetry_message")
         self.shack.send_telemetry_message(now)
-        print "Calling process_sat_messages"
+        print ("Calling process_sat_messages")
         self.shack.process_sat_messages("Sat pluto")
         self.shack.process_sat_messages("Sat ISS visible")
 
@@ -429,28 +512,27 @@ class mqtt2notifyTest(unittest.TestCase):
         self.shack.set_wind_gust(89/3.6)
         # Need a temp that isn't 0
         self.shack.set_temperature(10)
-        # Level 0 Wind Alert should print wx info on the 60 minute mark
+        # Level 0 Wind Alert should print wx info on the 4h minute mark
         # Just below thresholds
         self.shack.set_wind_gust(89/3.6)
         self.shack.set_temperature(10)
         self.shack.set_temperature(9)
-        hours = ['0', '2', '4', '6', '8', '10', '12',
-                      '14', '16', '18', '20', '22']
+        hours = ['0', '4', '8', '12', '16', '20']
         for hour in hours:
-            now = datetime(temp.year, temp.month, temp.day, int(hour), 00, 15)
-            # Should be ok to print on an even 2 hour time
+            now = datetime(temp.year, temp.month, temp.day, int(hour), 0, 15)
+            # Should be ok to print on an even 4 hour time
             self.assertTrue(self.shack.ok_send_wx(now))
 
-        hours = ['1', '3', '5', '7', '9', '11',
-                      '13', '15', '17', '19', '21', '23']
+        hours = ['1', '2', '3', '5', '6', '7', '9', '10', '11',
+                      '13', '14', '15', '17', '18', '19', '21', '22', '23']
 
         for hour in hours:
-            now = datetime(temp.year, temp.month, temp.day, int(hour), 00, 15)
+            now = datetime(temp.year, temp.month, temp.day, int(hour), 0, 15)
             # Should be ok to print on an even 2 hour time
             self.assertFalse(self.shack.ok_send_wx(now))
         # Level 1 Wind Gust
         self.shack.set_wind_gust(90/3.6)
-        hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
+        hours = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11',
                       '12', '13', '14', '15', '16', '17', '18', '19', '20',
                       '21', '22', '23']
         for hour in hours:
@@ -460,7 +542,7 @@ class mqtt2notifyTest(unittest.TestCase):
 
         hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
                       '12', '13', '14', '15', '16', '17', '18', '19', '20',
-                      '21', '22']
+                      '21', '22', '23']
         minutes = ['15', '30', '45']
         for hour in hours:
             for minute in minutes:
@@ -470,9 +552,9 @@ class mqtt2notifyTest(unittest.TestCase):
         # Level 2 Wind Gust
         self.shack.set_wind_gust(110/3.6)
 
-        hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
+        hours = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11',
                       '12', '13', '14', '15', '16', '17', '18', '19', '20',
-                      '21', '22']
+                      '21', '22', '23']
         minutes = ['0', '30']
         for hour in hours:
             for minute in minutes:
@@ -482,10 +564,10 @@ class mqtt2notifyTest(unittest.TestCase):
 
         # Level 3 Wind Gust
         self.shack.set_wind_gust(130/3.6)
-        hours = ['0', '1', '2', '3', '4', '5', '6', '8', '9', '10', '11',
+        hours = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11',
                       '12', '13', '14', '15', '16', '17', '18', '19', '20',
-                      '21', '22']
-        minutes = ['0', '15', '45']
+                      '21', '22', '23']
+        minutes = ['0', '15', '30', '45']
         for hour in hours:
             for minute in minutes:
                 now = datetime(temp.year, temp.month, temp.day, int(hour), int(minute), 15)
@@ -503,22 +585,21 @@ class mqtt2notifyTest(unittest.TestCase):
         # Just below thresholds
         collection = ['3', '2', '1', '0', '-1', '-2']
 
-        hours = ['0', '2', '4', '6', '8', '10', '12',
-                      '14', '16', '18', '20', '22']
+        hours = ['0', '4', '8', '12', '16', '20']
 
         for x in collection:
             self.shack.set_temperature(x)
             for hour in hours:
-                now = datetime(temp.year, temp.month, temp.day, int(hour), 00, 15)
-                # Should be ok to print on an even 2 hour time
+                now = datetime(temp.year, temp.month, temp.day, int(hour), 0, 15)
+                # Should be ok to print on an even 4 hour time
                 self.assertTrue(self.shack.ok_send_wx(now))
                 self.assertEqual(self.shack.temp_warning, 0)
 
-        hours = ['1', '3', '5', '7', '9', '11',
-                 '13', '15', '17', '19', '21', '23']
+        hours = ['1', '2', '3', '5', '6', '7', '9', '10', '11',
+                 '13', '14', '15', '17', '18', '19', '21', '22', '23']
         for hour in hours:
             now = datetime(temp.year, temp.month, temp.day, int(hour), 00, 15)
-            # Should be ok to print on an even 2 hour time
+            # Should be ok to print on an even 4 hour time
             self.assertFalse(self.shack.ok_send_wx(now))
             self.assertEqual(self.shack.temp_warning, 0)
 

@@ -5,9 +5,11 @@ from datetime import date, datetime
 import threading
 import ephem
 import tweepy
-from ConfigParser import SafeConfigParser
+from configparser import SafeConfigParser
 import logging
 import logging.handlers
+import random
+import string
 
 # Constant
 PREFIX = "wx/EI7IG-1"
@@ -38,6 +40,7 @@ class ShackData(threading.Thread):
     def __init__(self):
         self.log_level = parser.get('logging', 'level')
         self.warning_text = ''
+        self.warning_interval = 240
         self.wind_text = ''
         self.wind_direction = 0
         self.wind_speed = 0  # Meters Per Second
@@ -91,6 +94,7 @@ class ShackData(threading.Thread):
             # Checks here.
             self.reset_max_min(now)
             self.check_sun_up(now)
+            self.check_warning_interval()
 
             # Is it time to send a WX update?
             if self.ok_send_wx(now):
@@ -104,6 +108,8 @@ class ShackData(threading.Thread):
             time.sleep(1.0)
 
     def send_wx_message(self, now):
+    	# Set the warning text before sending
+        self.set_warning_suffix()    
         # Make sure there are sensible temparture max and min values
         # before displaying them
         if self.min_temperature != self.max_temperature:
@@ -158,34 +164,68 @@ class ShackData(threading.Thread):
         else:
             return False
 
-    def get_wx_interval(self):
-        if(self.wind_warning == 1 or
-           self.wind_gust_warning == 1 or
-           self.temp_warning == 1 or
-           self.rain_1h_warning == 1 or
-           self.rain_24h_warning == 1):
-            self.warning_text = " Yellow Alert"
-            return 60
-        elif(self.wind_warning == 2 or
-             self.wind_gust_warning == 2 or
-             self.temp_warning == 2 or
-             self.rain_1h_warning == 2 or
-             self.rain_24h_warning == 2):
-            self.warning_text = " Orange Alert"
-            return 30
-        elif(self.wind_warning == 3 or
-             self.wind_gust_warning == 3 or
-             self.temp_warning == 3 or
-             self.rain_1h_warning == 3 or
-             self.rain_24h_warning == 3):
-            self.warning_text = " Red Alert"
-            return 15
-        else:
-            self.warning_text = ""
-            return 240
+    def check_warning_interval(self):
+        # Wind and Gusts
+        if (self.wind_warning == 3 or
+            self.wind_gust_warning == 3 or
+            self.temp_warning == 3 or
+            self.rain_1h_warning == 3 or
+            self.rain_24h_warning == 3):
+            self.warning_interval = 15
+            self.warning_text = "Red Alert"
+            self.set_warning_suffix()
+            return self.warning_interval
+        
+        if (self.wind_warning == 2 or
+               self.wind_gust_warning == 2 or
+               self.temp_warning == 2 or
+               self.rain_1h_warning == 2 or
+               self.rain_24h_warning == 2):
+            self.warning_interval = 30
+            self.warning_text = "Orange Alert"
+            self.set_warning_suffix()
+            return self.warning_interval    
+
+        if (self.wind_warning == 1 or 
+	      self.wind_gust_warning == 1 or
+              self.temp_warning == 1 or
+              self.rain_1h_warning == 1 or
+              self.rain_24h_warning == 1):
+            self.warning_interval = 60
+            self.warning_text = "Yellow Alert"
+            self.set_warning_suffix()
+            return self.warning_interval
+        
+        self.warning_interval = 240
+        self.warning_text = ""
+
+        return self.warning_interval
+
+    def set_warning_suffix(self):
+        wind = max (self.wind_warning, self.wind_gust_warning)
+        rain = max (self.rain_1h_warning, self.rain_24h_warning)
+ 
+        if (rain == wind == self.temp_warning >0):
+            self.warning_text += " Temperature, Rainfall and Wind Warning"
+        elif ( wind == rain > 0):
+            self.warning_text += " Wind and Rainfall Warning"
+        elif ( wind == self.temp_warning > 0):
+            self.warning_text += " Wind and Temperature Warning"
+        elif ( rain == self.temp_warning > 0 ):
+            self.warning_text += " Temperature and Rainfall Warning"
+        elif ( wind > self.temp_warning or 
+             wind > rain):
+            self.warning_text += " Wind Warning"
+        elif ( rain > wind or
+               rain > self.temp_warning):
+            self.warning_text += " Rainfall Warning"
+        elif ( self.temp_warning > wind or
+                self.temp_warning > rain):
+            self.warning_text += " Temperature Warning"
+            
 
     def ok_send_wx(self, now):
-        interval = self.get_wx_interval()
+        interval = self.check_warning_interval()
         # Max an min can be the same as long as humidity > 0
         # otherwise don't print anything
         if((self.min_temperature != self.max_temperature or self.humidity > 0) and
@@ -604,6 +644,10 @@ class ShackData(threading.Thread):
             notify("Sat Update", payload)
             logger.debug(payload)
 
+def randomString(stringLength=10):
+    """Generate a random string of fixed length """
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(stringLength))
 
 # Send desktop notification.
 def notify(title, message):
@@ -675,14 +719,14 @@ def main():
         logger.debug("Tweeting disabled")
     MyShack.start()
 
-    client = mqtt.Client(parser.get('mqtt', 'clientname'),
+    client = mqtt.Client(parser.get('mqtt', 'clientname') + randomString(),
                          userdata=MyShack,
                          clean_session=True)
     client.on_connect = on_connect
     client.on_message = on_message
 
     client.connect(parser.get('mqtt', 'server'),
-                   parser.get('mqtt', 'port'), 60)
+                   int(parser.get('mqtt', 'port')), 60)
 
     # Loop forever
     try:
